@@ -169,6 +169,40 @@ int get_AMFIInitializeLocalSigningPublicKey_patch(void* kernel_buf,size_t kernel
     return 0;
 }
 
+// load firmware which are not signed like AOP.img4, Homer.img4, etc.
+int bypassFirmwareValidate(void* kernel_buf,size_t kernel_len) {
+
+    printf("%s: Entering ...\n",__FUNCTION__);
+
+    char img4_sig_check_string[55] = "Img4DecodePerformTrustEvaluationWithCallbacks: [%d %s]";
+    void* found = memmem(kernel_buf,kernel_len,img4_sig_check_string,54);
+    if(!found) {
+        printf("%s: Could not find \"%%s::%%s() Img4DecodePerformTrustEvaluationWithCallbacks, OMITING PATCHING...\" string\n",__FUNCTION__);
+        return -1;
+    }
+
+    char img4_wrapped_Image4_payload[27] = "trust evaluation succeeded";
+    void* ent_loc = memmem(kernel_buf,kernel_len,img4_wrapped_Image4_payload,26);
+    if(!ent_loc) {
+        printf("%s: Could not find \"wrapped Image4 payload\" string\n",__FUNCTION__);
+        return -1;
+    }
+
+    printf("%s: Found \"trust evaluation succeeded\" str loc at %p\n",__FUNCTION__,GET_OFFSET(kernel_len,ent_loc));
+    addr_t ent_ref = xref64(kernel_buf,0,kernel_len,(addr_t)GET_OFFSET(kernel_len, ent_loc));
+
+    if(!ent_ref) {
+        printf("%s: Could not find \"%%s::%%s() wrapped Image4 payload\" xref\n",__FUNCTION__);
+        return -1;
+    }
+    printf("%s: Found \"wrapped Image4 payload\" xref at %p\n",__FUNCTION__,(void*)ent_ref);
+
+    printf("%s: Patching \"wrapped Image4 payload\" at %p\n\n", __FUNCTION__,(void*)(ent_ref - 0x20));
+    *(uint32_t *) (kernel_buf + ent_ref - 0x20) = 0xd503201f;
+
+    return 0;
+}
+
 //iOS 14 AppleFirmwareUpdate img4 signature check
 int get_AppleFirmwareUpdate_img4_signature_check(void* kernel_buf,size_t kernel_len) {
 
@@ -324,7 +358,6 @@ int get_root_volume_seal_is_broken_patch(void* kernel_buf,size_t kernel_len) {
     printf("%s: Patching tbnz at %p\n",__FUNCTION__, (void*) tbnz_ref);
     *((uint32_t *) (kernel_buf + tbnz_ref)) = 0xd503201f;
     printf("%s: Patched tbnz at %p\n",__FUNCTION__, (void*) tbnz_ref);
-
     return 0;
 }
 
@@ -519,7 +552,7 @@ int tfp0_patch(void* kernel_buf,size_t kernel_len) {
     
     *(uint32_t *)(kernel_buf + caller_equals_victim) = 0xEB1F03FF;
     return 0;
-}
+}rootfs_rw;
 
 int force_developer_mode(void* kernel_buf,size_t kernel_len) {
     char devmode_status_string[sizeof("AMFI: trying to get developer mode status from ACM\n")] = "AMFI: trying to get developer mode status from ACM\n";
@@ -568,6 +601,7 @@ int main(int argc, char **argv) {
         printf("\t-a\t\tPatch AMFI\n");
         printf("\t-f\t\tPatch AppleFirmwareUpdate img4 signature check\n");
         printf("\t-s\t\tPatch SPUFirmwareValidation (iOS 15 Only)\n");
+        printf("\t-b\t\tBypassFirmwareValidate (IOS14 TESTED)\n");
         printf("\t-r\t\tPatch RootVPNotAuthenticatedAfterMounting (iOS 15 Only)\n");
         printf("\t-o\t\tPatch could_not_authenticate_personalized_root_hash (iOS 15 Only)\n");
         printf("\t-e\t\tPatch root volume seal is broken (iOS 15 Only)\n");
@@ -576,7 +610,7 @@ int main(int argc, char **argv) {
         printf("\t-h\t\tPatch is_root_hash_authentication_required_ios (iOS 16 only)\n");
         printf("\t-l\t\tPatch launchd path\n");
         printf("\t-t\t\tPatch tfp0\n");
-        printf("\t-d\t\tPatch developer mode\n");
+        printf("\t-d\t\tPatch developer mode\n"); 
         return 0;
     }
     
@@ -626,6 +660,12 @@ int main(int argc, char **argv) {
             printf("Kernel: Adding SPUFirmwareValidation patch...\n");
             get_SPUFirmwareValidation_patch(kernel_buf,kernel_len);
         }
+
+        if(strcmp(argv[i], "-b") == 0) {
+            printf("Kernel: Adding tbypassFirmwareValidate patch...\n");
+            bypassFirmwareValidate(kernel_buf,kernel_len);
+        }
+
         if(strcmp(argv[i], "-p") == 0) {
             printf("Kernel: Adding AMFIInitializeLocalSigningPublicKey patch...\n");
             get_AMFIInitializeLocalSigningPublicKey_patch(kernel_buf,kernel_len);
