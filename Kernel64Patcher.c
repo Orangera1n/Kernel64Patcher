@@ -203,6 +203,54 @@ int bypassFirmwareValidate(void* kernel_buf,size_t kernel_len) {
     return 0;
 }
 
+// load firmware which are not signed like AOP.img4, Homer.img4, etc. ios 13
+int bypassFirmwareValidate13(void* kernel_buf,size_t kernel_len) {
+
+    printf("%s: Entering ...\n",__FUNCTION__);
+
+    char first_string[45] = "Image4: Encrypted payloads are not supported";
+    void* found = memmem(kernel_buf,kernel_len,first_string,44);
+    if(!found) {
+        printf("%s: Could not find \"Image4: Encrypted payloads are not supported, OMITING PATCHING...\" string\n",__FUNCTION__);
+        return -1;
+    }
+
+    printf("%s: Found \"Image4: Encrypted payloads are not supported\" str loc at %p\n",__FUNCTION__,GET_OFFSET(kernel_len,found));
+    addr_t found_ref = xref64(kernel_buf,0,kernel_len,(addr_t)GET_OFFSET(kernel_len, found));
+
+    if(!found_ref) {
+        printf("%s: Could not find \"xref of Image4: Encrypted payloads are not supported\" xref\n",__FUNCTION__);
+        return -1;
+    }
+    printf("%s: Found \"Image4: Encrypted payloads are not supported\" xref at %p\n",__FUNCTION__,(void*)found);
+
+    printf("%s: Patching \"patching step 1\" at %p\n\n", __FUNCTION__,(void*)(found_ref + 0x50));
+    *(uint32_t *) (kernel_buf + found_ref + 0x50) = 0xd503201f;
+    printf("%s: Patching \"patching step 2\" at %p\n\n", __FUNCTION__,(void*)(found_ref - 0x50));
+    *(uint32_t *) (kernel_buf + found_ref - 0x50) = 0xd503201f;
+
+   char second_string[34] = "Image4: Payload hash check failed";
+    void* second_found = memmem(kernel_buf,kernel_len,second_string,33);
+    if(!second_found) {
+        printf("%s: Could not find \"Image4: Payload hash check failed, OMITING PATCHING...\" string\n",__FUNCTION__);
+        return -1;
+    }
+
+    printf("%s: Found \"Image4: Payload hash check failed\" str loc at %p\n",__FUNCTION__,GET_OFFSET(kernel_len,second_found));
+    addr_t second_found_ref = xref64(kernel_buf,0,kernel_len,(addr_t)GET_OFFSET(kernel_len, second_found));
+
+    if(!second_found_ref) {
+        printf("%s: Could not find \"xref of Image4: Payload hash check failed\" xref\n",__FUNCTION__);
+        return -1;
+    }
+    printf("%s: Found \"Image4: Payload hash check failed\" xref at %p\n",__FUNCTION__,(void*)second_found_ref);
+
+    printf("%s: Patching \"patching step 3\" at %p\n\n", __FUNCTION__,(void*)(second_found_ref - 0x08));
+    *(uint32_t *) (kernel_buf + second_found_ref - 0x08) = 0x17ffff96;
+
+    return 0;
+}
+
 //iOS 14 AppleFirmwareUpdate img4 signature check
 int get_AppleFirmwareUpdate_img4_signature_check(void* kernel_buf,size_t kernel_len) {
 
@@ -367,13 +415,22 @@ int get_update_rootfs_rw_patch(void* kernel_buf,size_t kernel_len) {
 
     printf("%s: Entering ...\n", __FUNCTION__);
 
-    char update_rootfs_rw_string[sizeof("%s:%d: %s Updating mount to read/write mode is not allowed")] = "%s:%d: %s Updating mount to read/write mode is not allowed";
-
-    unsigned char *update_rootfs_rw_loc = memmem(kernel_buf, kernel_len, update_rootfs_rw_string, sizeof("%s:%d: %s Updating mount to read/write mode is not allowed") - 1);
+    char update_rootfs_rw_string[sizeof("%s:%d: %ss%d:%.0lld Updating mount to read/write mode is not all")] = "%s:%d: %ss%d:%.0lld Updating mount to read/write mode is not all";
+    unsigned char *update_rootfs_rw_loc = memmem(kernel_buf, kernel_len, update_rootfs_rw_string, sizeof("%s:%d: %ss%d:%.0lld Updating mount to read/write mode is not all") - 1);
+    
     if(!update_rootfs_rw_loc) {
-        printf("%s: Could not find \"%s\" string\n", __FUNCTION__, update_rootfs_rw_string);
-        return -1;
+        
+        char update_rootfs_rw_string[sizeof("%s:%d: %ss%d:%.0lld Updating mount to read/write mode is not all")] = "%s:%d: %ss%d:%.0lld Updating mount to read/write mode is not all";
+        unsigned char *update_rootfs_rw_loc = memmem(kernel_buf, kernel_len, update_rootfs_rw_string, sizeof("%s:%d: %ss%d:%.0lld Updating mount to read/write mode is not all") - 1);
+        if (!update_rootfs_rw_loc)
+        {
+            printf("%s: Could not find \"%s\" string\n", __FUNCTION__, update_rootfs_rw_string);
+            return -1;
+
+        }
+        
     }
+
 
     for (; *update_rootfs_rw_loc != 0; update_rootfs_rw_loc--);
     update_rootfs_rw_loc++;
@@ -596,12 +653,12 @@ int main(int argc, char **argv) {
     FILE* fp = NULL;
     
     if(argc < 4){
-        printf("Version: " VERSION "\n");
+        printf("Version: MOD edwin ;]" "\n");
         printf("Usage: %s <kernel_in> <kernel_out> <args>\n",argv[0]);
         printf("\t-a\t\tPatch AMFI\n");
         printf("\t-f\t\tPatch AppleFirmwareUpdate img4 signature check\n");
         printf("\t-s\t\tPatch SPUFirmwareValidation (iOS 15 Only)\n");
-        printf("\t-b\t\tBypassFirmwareValidate (IOS14 TESTED)\n");
+        printf("\t-b\t\tBypassFirmwareValidate (IOS14 TESTED), add -b13 if you want to path ios 13\n");
         printf("\t-r\t\tPatch RootVPNotAuthenticatedAfterMounting (iOS 15 Only)\n");
         printf("\t-o\t\tPatch could_not_authenticate_personalized_root_hash (iOS 15 Only)\n");
         printf("\t-e\t\tPatch root volume seal is broken (iOS 15 Only)\n");
@@ -664,6 +721,11 @@ int main(int argc, char **argv) {
         if(strcmp(argv[i], "-b") == 0) {
             printf("Kernel: Adding tbypassFirmwareValidate patch...\n");
             bypassFirmwareValidate(kernel_buf,kernel_len);
+        }
+
+        if(strcmp(argv[i], "-b13") == 0) {
+            printf("Kernel: Adding tbypassFirmwareValidate patch...\n");
+            bypassFirmwareValidate13(kernel_buf,kernel_len);
         }
 
         if(strcmp(argv[i], "-p") == 0) {
