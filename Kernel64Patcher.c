@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <stdbool.h>
 #include "patchfinder64.c"
 
 #define GET_OFFSET(kernel_len, x) (x - (uintptr_t) kernel_buf)
@@ -167,6 +167,175 @@ int get_AMFIInitializeLocalSigningPublicKey_patch(void* kernel_buf,size_t kernel
     *(uint32_t *) (kernel_buf + xref_stuff + 0x4) = 0xD503201F;
     
     return 0;
+}
+
+// based on seprmvr, thank you so much mineek, i implemented it because here are linux users. 
+int fuck_the_sep(void* kernel_buf, size_t kernel_len) {
+    printf("%s: Entering ...\n",__FUNCTION__);
+
+    addr_t xref_stuff;
+    addr_t beg_func;
+    void *str_stuff;
+    
+    void* xnu_vers = memmem(kernel_buf,kernel_len,"root:xnu-",9);
+    int kernel_vers = atoi(xnu_vers+9);
+
+    printf("[*] Patching sks timeout strike\n");
+    str_stuff = memmem(kernel_buf, kernel_len, "AppleKeyStore: sks timeout strike %d", 36);
+    if (!str_stuff)
+    {
+        printf("[-] Failed to find sks timeout strike\n");
+        return -1;
+    }
+
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
+    printf("[+] Patched sks timeout strike\n");
+
+    printf("[*] Patching SEP Panicked\n");
+    str_stuff = memmem(kernel_buf, kernel_len, "\x1b[35m ***** SEP Panicked! dumping log. *****\x1b[0m", 36);
+    // on ios 12.4 kernel sep panicked not work for me. so it just jump this. 
+    int errorsad = 1;
+    if (!str_stuff)
+    {
+        printf("[-] Failed to find SEP Panicked\n");
+        errorsad = 0;
+    }
+
+    if (errorsad == 1)
+    {
+        xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+        beg_func = bof64(kernel_buf, 0, xref_stuff);
+        *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+        *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
+        printf("[+] Patched SEP Panicked\n");
+    }
+    
+    printf("[*] Patching AppleKeyStore: operation failed\n");
+    str_stuff = memmem(kernel_buf, kernel_len, "AppleKeyStore: operation %s(pid: %d se", 38);
+    if (!str_stuff)
+    {
+        printf("[-] Failed to find AppleKeyStore: operation failed\n");
+        return -1;
+    }
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    while (*(uint32_t *)(kernel_buf + xref_stuff) != 0xD63F0100)
+    {
+        xref_stuff -= 0x4;
+    }
+    *(uint32_t *)(kernel_buf + xref_stuff) = 0xD2800000;
+    printf("[+] Patched AppleKeyStore: operation failed\n");
+
+    if (kernel_vers == 4903) {
+        // did everything needed already for iOS 12
+        printf("%s: quitting...\n", __FUNCTION__);
+        return 0;
+    }
+
+    printf("[*] Patching AppleMesaSEPDriver\n");
+    str_stuff = memmem(kernel_buf, kernel_len, "ERROR: %s: AssertMacros: %s (value = 0x%lx), %s file: %s, line: %d", 66);
+    if (!str_stuff)
+    {
+        printf("[-] Failed to find AppleMesaSEPDriver\n");
+        return -1;
+    }
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
+    printf("[+] Patched AppleMesaSEPDriver\n");
+
+    //AppleSEP:WARNING: EP0 received unsolicited message
+    printf("[*] Patching AppleSEP:WARNING: EP0 received unsolicited message\n");
+    str_stuff = memmem(kernel_buf, kernel_len, "AppleSEP:WARNING: EP0 received unsolicited message", 48);
+    if (!str_stuff)
+    {
+        printf("[-] Failed to find AppleSEP:WARNING: EP0 received unsolicited message\n");
+        return -1;
+    }
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(klen, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
+    printf("[+] Patched AppleSEP:WARNING: EP0 received unsolicited message\n");
+
+    //SEP/OS failed to boot at stage
+    printf("[*] Patching SEP/OS failed to boot at stage\n");
+    str_stuff = memmem(kernel_buf, kernel_len, "\"SEP/OS failed to boot at stage %d\\nFirmware type: %s\"@/BuildRoot/Library/Caches/com.apple.xbs/Sources/AppleSEPManager", 96);
+    if (!str_stuff)
+    {
+        printf("[-] Failed to find SEP/OS failed to boot at stage\n");
+        return -1;
+    }
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
+    printf("[+] Patched SEP/OS failed to boot at stage\n");
+
+    //AppleBiometricSensor: RECOVERY: Reason %d, Last command 0x%x
+    printf("[*] Patching AppleBiometricSensor: RECOVERY\n");
+    str_stuff = memmem(kernel_buf, kernel_len, "AppleBiometricSensor: RECOVERY: Reason %d, Last command 0x%x", 57);
+    if (!str_stuff)
+    {
+        printf("[-] Failed to find AppleBiometricSensor: RECOVERY\n");
+        return -1;
+    }
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
+    printf("[+] Patched AppleBiometricSensor: RECOVERY\n");
+
+    //ERROR: %s: _sensorErrorCounter:%u --> reset\n
+    printf("[*] Patching _sensorErrorCounter: --> reset\n");
+    str_stuff = memmem(kernel_buf, kernel_len, "ERROR: %s: _sensorErrorCounter:%u --> reset\\n", 41);
+    if (!str_stuff)
+    {
+        printf("[-] Failed to find _sensorErrorCounter: --> reset\n");
+        return -1;
+    }
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
+    printf("[+] Patched _sensorErrorCounter: --> reset\n");
+    
+    //ERROR: %s: AssertMacros: %s (value = 0x%lx), %s file: %s, line: %d\n\n
+    printf("[*] Patching ERROR: AssertMacros\n");
+    str_stuff = memmem(kernel_buf, kernel_len, "ERROR: %s: AssertMacros: %s (value = 0x%lx), %s file: %s, line: %d", 66);
+    if (!str_stuff)
+    {
+        printf("[-] Failed to find ERROR: AssertMacros\n");
+        return -1;
+    }
+    int done = 0;
+    while (!done)
+    {
+        xref_stuff = xref64(kernel_buf, xref_stuff + 1, kernel_len, (addr_t)GET_OFFSET(klen, str_stuff));
+        if (xref_stuff == 0)
+        {
+            done = 1;
+            break;
+        }
+        beg_func = bof64(kernel_buf, 0, xref_stuff);
+        if (*(uint32_t *)(kernel_buf + beg_func + 0x18) == 0xb4000293)
+        {
+            printf("[+] Skipped ERROR: AssertMacros at 0x%llx\n", beg_func);
+            continue;
+        }
+        *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+        *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
+        printf("[+] Patched ERROR: AssertMacros at 0x%llx\n", beg_func);
+    }
+    printf("[+] Patched ERROR: AssertMacros\n");
+    printf("%s: quitting...\n", __FUNCTION__);
+
+    return 0;
+
+
 }
 
 // load firmware which are not signed like AOP.img4, Homer.img4, etc.
@@ -668,6 +837,7 @@ int main(int argc, char **argv) {
         printf("\t-l\t\tPatch launchd path\n");
         printf("\t-t\t\tPatch tfp0\n");
         printf("\t-d\t\tPatch developer mode\n"); 
+        printf("\t-k\t\tPatch fuckthesep, based on seprmvr\n");
         return 0;
     }
     
@@ -763,6 +933,10 @@ int main(int argc, char **argv) {
          if(strcmp(argv[i], "-d") == 0) {
             printf("Kernel: Adding force developer mode patch...\n");
             force_developer_mode(kernel_buf,kernel_len);
+        }
+        if(strcmp(argv[i], "-k") == 0) {
+            printf("Kernel: SEP patcher...\n");
+            fuck_the_sep(kernel_buf,kernel_len);
         }
     }
     
