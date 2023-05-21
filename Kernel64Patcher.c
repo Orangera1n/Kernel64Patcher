@@ -170,7 +170,7 @@ int get_AMFIInitializeLocalSigningPublicKey_patch(void* kernel_buf,size_t kernel
 }
 
 // based on seprmvr, thank you so much mineek, i implemented it because here are linux users. 
-int get_funny_patches (void* kernel_buf, size_t kernel_len) {
+int fuck_the_sep(void* kernel_buf, size_t kernel_len) {
     printf("%s: Entering ...\n",__FUNCTION__);
 
     addr_t xref_stuff;
@@ -180,246 +180,164 @@ int get_funny_patches (void* kernel_buf, size_t kernel_len) {
     void* xnu_vers = memmem(kernel_buf,kernel_len,"root:xnu-",9);
     int kernel_vers = atoi(xnu_vers+9);
 
-   int get_funny_patches(void *kbuf, size_t klen)
-{
-    printf("%s: Starting...\n", __FUNCTION__);
-
     printf("[*] Patching sks timeout strike\n");
-    str_stuff = memmem(kbuf, klen, "AppleKeyStore: sks timeout strike %d", 36);
+    str_stuff = memmem(kernel_buf, kernel_len, "AppleKeyStore: sks timeout strike %d", 36);
     if (!str_stuff)
     {
         printf("[-] Failed to find sks timeout strike\n");
         return -1;
     }
-    xref_stuff = xref64(kbuf, 0, klen, (addr_t)GET_OFFSET(klen, str_stuff));
-    beg_func = bof64(kbuf, 0, xref_stuff);
-    *(uint32_t *)(kbuf + beg_func) = 0x52800000;
-    *(uint32_t *)(kbuf + beg_func + 0x4) = 0xD65F03C0;
+
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
     printf("[+] Patched sks timeout strike\n");
 
-    //\x1b[35m ***** SEP Panicked! dumping log. *****\x1b[0m
     printf("[*] Patching SEP Panicked\n");
-    str_stuff = memmem(kbuf, klen, "\x1b[35m ***** SEP Panicked! dumping log. *****\x1b[0m", 36);
+    str_stuff = memmem(kernel_buf, kernel_len, "\x1b[35m ***** SEP Panicked! dumping log. *****\x1b[0m", 36);
+    // on ios 12.4 kernel sep panicked not work for me. so it just jump this. 
+    int errorsad = 1;
     if (!str_stuff)
     {
         printf("[-] Failed to find SEP Panicked\n");
-        return -1;
+        errorsad = 0;
     }
-    xref_stuff = xref64(kbuf, 0, klen, (addr_t)GET_OFFSET(klen, str_stuff));
-    beg_func = bof64(kbuf, 0, xref_stuff);
-    *(uint32_t *)(kbuf + beg_func) = 0x52800000;
-    *(uint32_t *)(kbuf + beg_func + 0x4) = 0xD65F03C0;
-    printf("[+] Patched SEP Panicked\n");
 
+    if (errorsad == 1)
+    {
+        xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+        beg_func = bof64(kernel_buf, 0, xref_stuff);
+        *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+        *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
+        printf("[+] Patched SEP Panicked\n");
+    }
+    
     printf("[*] Patching AppleKeyStore: operation failed\n");
-    str_stuff = memmem(kbuf, klen, "AppleKeyStore: operation %s(pid: %d se", 38);
+    str_stuff = memmem(kernel_buf, kernel_len, "AppleKeyStore: operation %s(pid: %d se", 38);
     if (!str_stuff)
     {
         printf("[-] Failed to find AppleKeyStore: operation failed\n");
         return -1;
     }
-    xref_stuff = xref64(kbuf, 0, klen, (addr_t)GET_OFFSET(klen, str_stuff));
-    while (*(uint32_t *)(kbuf + xref_stuff) != 0xD63F0100)
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    while (*(uint32_t *)(kernel_buf + xref_stuff) != 0xD63F0100)
     {
         xref_stuff -= 0x4;
     }
-    *(uint32_t *)(kbuf + xref_stuff) = 0xD2800000;
+    *(uint32_t *)(kernel_buf + xref_stuff) = 0xD2800000;
     printf("[+] Patched AppleKeyStore: operation failed\n");
 
+    if (kernel_vers == 4903) {
+        // did everything needed already for iOS 12
+        printf("%s: quitting...\n", __FUNCTION__);
+        return 0;
+    }
+
     printf("[*] Patching AppleMesaSEPDriver\n");
-    str_stuff = memmem(kbuf, klen, "ERROR: %s: AssertMacros: %s (value = 0x%lx), %s file: %s, line: %d", 66);
+    str_stuff = memmem(kernel_buf, kernel_len, "ERROR: %s: AssertMacros: %s (value = 0x%lx), %s file: %s, line: %d", 66);
     if (!str_stuff)
     {
-        str_stuff = memmem(kbuf, klen, "AssertMacros: %s (value = 0x%lx), %s file: %s, line: %d", 55);
-        if (!str_stuff)
-        {
-            printf("[-] Failed to find AppleMesaSEPDriver\n");
-            return -1;
-        }
+        printf("[-] Failed to find AppleMesaSEPDriver\n");
+        return -1;
     }
-    xref_stuff = xref64(kbuf, 0, klen, (addr_t)GET_OFFSET(klen, str_stuff));
-    beg_func = bof64(kbuf, 0, xref_stuff);
-    *(uint32_t *)(kbuf + beg_func) = 0x52800000;
-    *(uint32_t *)(kbuf + beg_func + 0x4) = 0xD65F03C0;
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
     printf("[+] Patched AppleMesaSEPDriver\n");
 
     //AppleSEP:WARNING: EP0 received unsolicited message
     printf("[*] Patching AppleSEP:WARNING: EP0 received unsolicited message\n");
-    str_stuff = memmem(kbuf, klen, "AppleSEP:WARNING: EP0 received unsolicited message", 48);
+    str_stuff = memmem(kernel_buf, kernel_len, "AppleSEP:WARNING: EP0 received unsolicited message", 48);
     if (!str_stuff)
     {
         printf("[-] Failed to find AppleSEP:WARNING: EP0 received unsolicited message\n");
         return -1;
     }
-    xref_stuff = xref64(kbuf, 0, klen, (addr_t)GET_OFFSET(klen, str_stuff));
-    beg_func = bof64(kbuf, 0, xref_stuff);
-    *(uint32_t *)(kbuf + beg_func) = 0x52800000;
-    *(uint32_t *)(kbuf + beg_func + 0x4) = 0xD65F03C0;
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(klen, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
     printf("[+] Patched AppleSEP:WARNING: EP0 received unsolicited message\n");
 
     //SEP/OS failed to boot at stage
     printf("[*] Patching SEP/OS failed to boot at stage\n");
-    str_stuff = memmem(kbuf, klen, "\"SEP/OS failed to boot at stage %d\\nFirmware type: %s\"@/BuildRoot/Library/Caches/com.apple.xbs/Sources/AppleSEPManager/AppleSEPManager-302.70.5/AppleSEPManagerARM.cpp:1646", 96);
+    str_stuff = memmem(kernel_buf, kernel_len, "\"SEP/OS failed to boot at stage %d\\nFirmware type: %s\"@/BuildRoot/Library/Caches/com.apple.xbs/Sources/AppleSEPManager", 96);
     if (!str_stuff)
     {
-        str_stuff = memmem(kbuf, klen, "\"SEP/OS failed to boot\"@/BuildRoot/Library/Caches/com.apple.xbs/Sources/AppleSEPManager/AppleSEPManager", 92);
-        if (!str_stuff)
-        {
-            printf("[-] Failed to find SEP/OS failed to boot at stage\n");
-            return -1;
-        }
+        printf("[-] Failed to find SEP/OS failed to boot at stage\n");
+        return -1;
     }
-    xref_stuff = xref64(kbuf, 0, klen, (addr_t)GET_OFFSET(klen, str_stuff));
-    beg_func = bof64(kbuf, 0, xref_stuff);
-    *(uint32_t *)(kbuf + beg_func) = 0x52800000;
-    *(uint32_t *)(kbuf + beg_func + 0x4) = 0xD65F03C0;
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
     printf("[+] Patched SEP/OS failed to boot at stage\n");
 
     //AppleBiometricSensor: RECOVERY: Reason %d, Last command 0x%x
     printf("[*] Patching AppleBiometricSensor: RECOVERY\n");
-    str_stuff = memmem(kbuf, klen, "AppleBiometricSensor: RECOVERY: Reason %d, Last command 0x%x", 57);
+    str_stuff = memmem(kernel_buf, kernel_len, "AppleBiometricSensor: RECOVERY: Reason %d, Last command 0x%x", 57);
     if (!str_stuff)
     {
         printf("[-] Failed to find AppleBiometricSensor: RECOVERY\n");
         return -1;
     }
-    xref_stuff = xref64(kbuf, 0, klen, (addr_t)GET_OFFSET(klen, str_stuff));
-    beg_func = bof64(kbuf, 0, xref_stuff);
-    *(uint32_t *)(kbuf + beg_func) = 0x52800000;
-    *(uint32_t *)(kbuf + beg_func + 0x4) = 0xD65F03C0;
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
     printf("[+] Patched AppleBiometricSensor: RECOVERY\n");
+
+    //ERROR: %s: _sensorErrorCounter:%u --> reset\n
+    printf("[*] Patching _sensorErrorCounter: --> reset\n");
+    str_stuff = memmem(kernel_buf, kernel_len, "ERROR: %s: _sensorErrorCounter:%u --> reset\\n", 41);
+    if (!str_stuff)
+    {
+        printf("[-] Failed to find _sensorErrorCounter: --> reset\n");
+        return -1;
+    }
+    xref_stuff = xref64(kernel_buf, 0, kernel_len, (addr_t)GET_OFFSET(kernel_len, str_stuff));
+    beg_func = bof64(kernel_buf, 0, xref_stuff);
+    *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+    *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
+    printf("[+] Patched _sensorErrorCounter: --> reset\n");
     
     //ERROR: %s: AssertMacros: %s (value = 0x%lx), %s file: %s, line: %d\n\n
     printf("[*] Patching ERROR: AssertMacros\n");
-    str_stuff = memmem(kbuf, klen, "ERROR: %s: AssertMacros: %s (value = 0x%lx), %s file: %s, line: %d", 66);
+    str_stuff = memmem(kernel_buf, kernel_len, "ERROR: %s: AssertMacros: %s (value = 0x%lx), %s file: %s, line: %d", 66);
     if (!str_stuff)
     {
-        str_stuff = memmem(kbuf, klen, "AssertMacros: %s (value = 0x%lx), %s file: %s, line: %d", 55);
-        if (!str_stuff)
-        {
-            printf("[-] Failed to find ERROR: AssertMacros\n");
-            return -1;
-        }
+        printf("[-] Failed to find ERROR: AssertMacros\n");
+        return -1;
     }
     int done = 0;
     while (!done)
     {
-        xref_stuff = xref64(kbuf, xref_stuff + 1, klen, (addr_t)GET_OFFSET(klen, str_stuff));
+        xref_stuff = xref64(kernel_buf, xref_stuff + 1, kernel_len, (addr_t)GET_OFFSET(klen, str_stuff));
         if (xref_stuff == 0)
         {
             done = 1;
             break;
         }
-        beg_func = bof64(kbuf, 0, xref_stuff);
-        if (*(uint32_t *)(kbuf + beg_func + 0x18) == 0xb4000293)
+        beg_func = bof64(kernel_buf, 0, xref_stuff);
+        if (*(uint32_t *)(kernel_buf + beg_func + 0x18) == 0xb4000293)
         {
             printf("[+] Skipped ERROR: AssertMacros at 0x%llx\n", beg_func);
             continue;
         }
-        *(uint32_t *)(kbuf + beg_func) = 0x52800000;
-        *(uint32_t *)(kbuf + beg_func + 0x4) = 0xD65F03C0;
+        *(uint32_t *)(kernel_buf + beg_func) = 0x52800000;
+        *(uint32_t *)(kernel_buf + beg_func + 0x4) = 0xD65F03C0;
         printf("[+] Patched ERROR: AssertMacros at 0x%llx\n", beg_func);
     }
     printf("[+] Patched ERROR: AssertMacros\n");
-
-    ///BuildRoot/Library/Caches/com.apple.xbs/Sources/AppleCredentialManager/AppleCredentialManager-195.70.8/AppleCredentialManager/AppleCredentialManager.cpp
-    printf("[*] Patching AppleCredentialManager\n");
-    str_stuff = memmem(kbuf, klen, "/BuildRoot/Library/Caches/com.apple.xbs/Sources/AppleCredentialManager/AppleCredentialManager-195/AppleCredentialManager/AppleCredentialManager.cpp", 147);
-    if (!str_stuff)
-    {
-        printf("[-] Failed to find AppleCredentialManager\n");
-        return -1;
-    }
-    done = 0;
-    while (!done)
-    {
-        xref_stuff = xref64(kbuf, xref_stuff + 1, klen, (addr_t)GET_OFFSET(klen, str_stuff));
-        if (xref_stuff == 0)
-        {
-            done = 1;
-            break;
-        }
-        beg_func = bof64(kbuf, 0, xref_stuff);
-        *(uint32_t *)(kbuf + beg_func) = 0x52800000;
-        *(uint32_t *)(kbuf + beg_func + 0x4) = 0xD65F03C0;
-        printf("[+] Patched AppleCredentialManager at 0x%llx\n", beg_func);
-    }
-    printf("[+] Patched AppleCredentialManager\n");
-
     printf("%s: quitting...\n", __FUNCTION__);
 
     return 0;
+
+
 }
 
-int main(int argc, char *argv[])
-{
-    printf("seprmvr64\n");
-    printf("by mineek\n");
-    if (argc < 3)
-    {
-        printf("Usage: kcache.raw kcache.patched [--skip-amfi]\n");
-        return 0;
-    }
-
-    printf("%s: Starting...\n", __FUNCTION__);
-
-    char *in = argv[1];
-    char *out = argv[2];
-
-    void *kbuf;
-    size_t klen;
-
-    FILE *fp = fopen(in, "rb");
-    if (!fp)
-    {
-        printf("[-] Failed to open kernel\n");
-        return -1;
-    }
-
-    fseek(fp, 0, SEEK_END);
-    klen = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-
-    kbuf = (void *)malloc(klen);
-    if (!kbuf)
-    {
-        printf("[-] Out of memory\n");
-        fclose(fp);
-        return -1;
-    }
-
-    fread(kbuf, 1, klen, fp);
-    fclose(fp);
-
-    // CREDITS: https://github.com/Ralph0045/Kernel64Patcher/blob/master/Kernel64Patcher.c
-    if (argc == 4 && !strcmp(argv[3], "--skip-amfi"))
-    {
-        printf("[*] Skipping AMFI patch\n");
-    }
-    else
-    {
-        printf("[*] Patching AMFI\n");
-        get_amfi_out_of_my_way_patch(kbuf, klen);
-        printf("[+] Patched AMFI\n");
-    }
-
-    get_funny_patches(kbuf, klen);
-
-    fp = fopen(out, "wb+");
-
-    fwrite(kbuf, 1, klen, fp);
-    fflush(fp);
-    fclose(fp);
-
-    free(kbuf);
-
-    printf("[*] Writing out patched file to %s\n", out);
-
-    printf("%s: Quitting...\n", __FUNCTION__);
-
-    return 0;
-}
-    
 // load firmware which are not signed like AOP.img4, Homer.img4, etc.
 int bypassFirmwareValidate(void* kernel_buf,size_t kernel_len) {
 
@@ -904,12 +822,12 @@ int main(int argc, char **argv) {
     FILE* fp = NULL;
     
     if(argc < 4){
-        printf("Version: i don't fucking know ;]" "\n");
+        printf("Version: MOD edwin ;]" "\n");
         printf("Usage: %s <kernel_in> <kernel_out> <args>\n",argv[0]);
         printf("\t-a\t\tPatch AMFI\n");
         printf("\t-f\t\tPatch AppleFirmwareUpdate img4 signature check\n");
         printf("\t-s\t\tPatch SPUFirmwareValidation (iOS 15 Only)\n");
-        printf("\t-b\t\tBPatch FirmwareValidate (iOS14 TESTED), add -b13 if you want to patch ios 13\n");
+        printf("\t-b\t\tBypassFirmwareValidate (IOS14 TESTED), add -b13 if you want to path ios 13\n");
         printf("\t-r\t\tPatch RootVPNotAuthenticatedAfterMounting (iOS 15 Only)\n");
         printf("\t-o\t\tPatch could_not_authenticate_personalized_root_hash (iOS 15 Only)\n");
         printf("\t-e\t\tPatch root volume seal is broken (iOS 15 Only)\n");
@@ -919,7 +837,7 @@ int main(int argc, char **argv) {
         printf("\t-l\t\tPatch launchd path\n");
         printf("\t-t\t\tPatch tfp0\n");
         printf("\t-d\t\tPatch developer mode\n"); 
-        printf("\t-k\t\tPatch most sep shit, based on seprmvr\n");
+        printf("\t-k\t\tPatch fuckthesep, based on seprmvr\n");
         return 0;
     }
     
