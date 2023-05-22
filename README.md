@@ -1,5 +1,5 @@
 # Kernel64Patcher
-A 64 Bit kernel patcher based on xerub's patchfinder64, forked for palera1n
+A 64 Bit kernel patcher based on xerub's patchfinder64, forked to have all of these options.
 
 ## Compiling
 ```
